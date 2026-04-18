@@ -1,6 +1,6 @@
 Parallel Proxy Over HTTPS
 =========================
-Some internet service providers and firewalls throttles connections, but for some reason only each TCP connection independently. Therefore we can workaround this by using a tunnelling proxy that create hundreds of real TCP connections per tunnelled connection ... 
+Some internet service providers and firewalls throttles connections, but for some reason only each TCP connection independently. Therefore we can workaround this by using a tunnelling proxy that create hundreds of real TCP connections for each tunnelled connection ... 
 
 Usage
 -----
