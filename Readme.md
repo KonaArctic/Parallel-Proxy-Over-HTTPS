@@ -4,7 +4,7 @@ Some internet service providers and firewalls throttles connections, but for som
 
 Usage
 -----
-Parallel Proxy Over HTTPS is known to work with [OVH](https://ovhcloud.com) and [Akile](https://akile.io), and is expected to work with any other [VPS](https://en.wikipedia.org/wiki/Virtual_Private_Server) provider. `HOSTNAME` is your server's hostname, and `PASSWORD` is a randomly generated password.
+Parallel Proxy Over HTTPS is known to work with [OVH](https://ovhcloud.com) and [Akile](https://akile.io), and is expected to work with any other [VPS](https://en.wikipedia.org/wiki/Virtual_Private_Server) provider, and is also known to work with reverse proxies like [Cloudflare](https://cloudflare.com). `HOSTNAME` is your server's hostname, and `PASSWORD` is a randomly generated password.
 
 -	On your  run `go run $(pwd) server :443 PASSWORD`
 -	Recommended: setup a [TLS terminator](https://en.wikipedia.org/wiki/TLS_termination_proxy)
