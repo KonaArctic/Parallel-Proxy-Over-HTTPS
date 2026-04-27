@@ -15,7 +15,7 @@ import "strings"
 import "time"
 
 var nocert bool = func( )bool{
-	switch strings.ToLower( os.Getenv( "KONA_INSECURE_SKIP_VERIFY" ) ) {
+	switch strings.ToLower( os.Getenv( "KONA_TLS_INSECURE_SKIP_VERIFY" ) ) {
 		case "1" :
 			return true
 		case "true" :
