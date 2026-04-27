@@ -5,6 +5,7 @@ import "golang.org/x/net/proxy"
 import "io"
 import "net"
 import "net/http"
+import "os"
 import "slices"
 import "strings"
 import "time"
@@ -22,9 +23,16 @@ func server( argues [ ]string )int {
 		return 3
 	}
 	defer listen.Close( )
-	// Im too lazy to implement proper certificates ...
 	var crtkey tls.Certificate
-	crtkey , err = tls.X509KeyPair( [ ]byte( `-----BEGIN CERTIFICATE-----
+	var buffer [ ]byte 
+	buffer = [ ]byte( os.Getenv( "KONA_TLS_CERTIFICATE_WITH_PRIVATE_KEY" ) )
+	if len( buffer ) > 0 {
+		crtkey , err = tls.X509KeyPair( buffer , buffer )
+		if err != nil {
+			return 2
+		}
+	} else {
+		crtkey , err = tls.X509KeyPair( [ ]byte( `-----BEGIN CERTIFICATE-----
 MIIBhTCCASugAwIBAgIQIRi6zePL6mKjOipn+dNuaTAKBggqhkjOPQQDAjASMRAw
 DgYDVQQKEwdBY21lIENvMB4XDTE3MTAyMDE5NDMwNloXDTE4MTAyMDE5NDMwNlow
 EjEQMA4GA1UEChMHQWNtZSBDbzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABD0d
@@ -39,8 +47,9 @@ MHcCAQEEIIrYSSNQFaA2Hwf1duRSxKtLYX5CB04fSeQ6tF1aY/PuoAoGCCqGSM49
 AwEHoUQDQgAEPR3tU2Fta9ktY+6P9G0cWO+0kETA6SFs38GecTyudlHz6xvCdz8q
 EKTcWGekdmdDPsHloRNtsiCa697B2O9IFA==
 -----END EC PRIVATE KEY-----` ) )
-	if err != nil {
-		return 1
+		if err != nil {
+			return 1
+		}
 	}
 	var id2que map[ string ]( chan io.ReadWriteCloser ) = map[ string ]( chan io.ReadWriteCloser ){ }
 	var locker chan any = make( chan any , 1 )
@@ -256,11 +265,13 @@ EKTcWGekdmdDPsHloRNtsiCa697B2O9IFA==
 				<- finish
 			}
 		} ) ,
-	} ).Serve( tls.NewListener( listen , & tls.Config{
-		Certificates : [ ]tls.Certificate{
-			crtkey ,
+		TLSConfig :  & tls.Config{
+			Certificates : [ ]tls.Certificate{
+				crtkey ,
+			} ,
 		} ,
-	} ) )
+		TLSNextProto : map[ string ]func( * http.Server , * tls.Conn , http.Handler ){ } ,
+	} ).ServeTLS( listen , "" , "" )
 	if err != nil {
 		return 1
 	}
@@ -272,90 +283,3 @@ type closer func( )error
 func ( self closer )Close( )error {
 	return self( )
 }
-
-/*
-// Detect and unwrap TLS
-type detect struct{
-	net.Listener
-}
-
-func ( self * detect )Accept( )( net.Conn , error ) {
-	var err error
-	var stream net.Conn
-	stream , err = self.Listener.Accept( )
-	if err != nil {
-		return nil , err
-	}
-	err = stream.SetReadDeadline( time.Now( ).Add( time.Minute ) )
-	if err != nil {
-		_ = stream.Close( )
-		return self.Accept( )
-	}
-	var buffer [ ]byte = make( [ ]byte , 1 , 1 )
-	_ , err = stream.Read( buffer )
-	if err != nil {
-		_ = stream.Close( )
-		return self.Accept( )
-	}
-	// Hmm ...
-	type noread interface{
-		io.WriteCloser
-		LocalAddr( )net.Addr
-		RemoteAddr( )net.Addr
-		SetDeadline( time.Time)error
-		SetReadDeadline( time.Time )error
-		SetWriteDeadline( time.Time )error
-	}
-	stream = struct{
-		noread
-		io.Reader
-	}{
-		noread : stream ,
-		Reader : io.MultiReader( bytes.NewReader( buffer ) , stream ) ,
-	}
-	// TLS starts with 0x16
-	if  buffer[ 0 ] < 0x20 ||
-	    buffer[ 0 ] > 0xFE {
-		// Im too lazy to implement proper certificates ...
-		var crtkey tls.Certificate
-		crtkey , err = tls.X509KeyPair( [ ]byte( `-----BEGIN CERTIFICATE-----
-MIIBhTCCASugAwIBAgIQIRi6zePL6mKjOipn+dNuaTAKBggqhkjOPQQDAjASMRAw
-DgYDVQQKEwdBY21lIENvMB4XDTE3MTAyMDE5NDMwNloXDTE4MTAyMDE5NDMwNlow
-EjEQMA4GA1UEChMHQWNtZSBDbzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABD0d
-7VNhbWvZLWPuj/RtHFjvtJBEwOkhbN/BnnE8rnZR8+sbwnc/KhCk3FhnpHZnQz7B
-5aETbbIgmuvewdjvSBSjYzBhMA4GA1UdDwEB/wQEAwICpDATBgNVHSUEDDAKBggr
-BgEFBQcDATAPBgNVHRMBAf8EBTADAQH/MCkGA1UdEQQiMCCCDmxvY2FsaG9zdDo1
-NDUzgg4xMjcuMC4wLjE6NTQ1MzAKBggqhkjOPQQDAgNIADBFAiEA2zpJEPQyz6/l
-Wf86aX6PepsntZv2GYlA5UpabfT2EZICICpJ5h/iI+i341gBmLiAFQOyTDT+/wQc
-6MF9+Yw1Yy0t
------END CERTIFICATE-----` ) , [ ]byte( `-----BEGIN EC PRIVATE KEY-----
-MHcCAQEEIIrYSSNQFaA2Hwf1duRSxKtLYX5CB04fSeQ6tF1aY/PuoAoGCCqGSM49
-AwEHoUQDQgAEPR3tU2Fta9ktY+6P9G0cWO+0kETA6SFs38GecTyudlHz6xvCdz8q
-EKTcWGekdmdDPsHloRNtsiCa697B2O9IFA==
------END EC PRIVATE KEY-----` ) )
-		if err != nil {
-			_ = stream.Close( )
-			return nil , err
-		}
-	    	return tls.Server( stream , & tls.Config{
-			Certificates : [ ]tls.Certificate{
-				crtkey ,
-			} ,
-	    	} ) , nil
-	} else {
-		return stream , nil
-	}
-} 
-
-/*	var tcpcon * net.TCPConn
-	tcpcon , ok = stream.( * net.TCPConn )
-	if ok {
-		var length int
-		for length = 4096 ; length < 33554432 ; length *= 2 {
-			err = tcpcon.SetWriteBuffer( length )
-			if err != nil {
-				break
-			}
-		}
-	}	*/
-
