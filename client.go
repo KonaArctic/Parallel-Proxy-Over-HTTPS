@@ -14,19 +14,6 @@ import "slices"
 import "strings"
 import "time"
 
-var nocert bool = func( )bool{
-	switch strings.ToLower( os.Getenv( "KONA_TLS_INSECURE_SKIP_VERIFY" ) ) {
-		case "1" :
-			return true
-		case "true" :
-			return true
-		case "yes" :
-			return true
-		default :
-			return false
-	}
-}( )
-
 func client( argues [ ]string )int {
 	var err error
 	if len( argues ) < 2 {
@@ -64,7 +51,10 @@ func client( argues [ ]string )int {
 						TLSHandshakeTimeout : time.Second * 10 ,
 						ExpectContinueTimeout : time.Second * 1 ,
 						TLSClientConfig : & tls.Config{
-							InsecureSkipVerify : nocert ,
+							InsecureSkipVerify : slices.Contains( [ ]string{
+								"1" ,
+								"true" ,
+							} , strings.ToLower( os.Getenv( "KONA_TLS_INSECURE_SKIP_VERIFY" ) ) ),
 						} ,
 						TLSNextProto : map[ string ]func( string , * tls.Conn )http.RoundTripper{ } ,
 					} ,
@@ -300,8 +290,7 @@ func client( argues [ ]string )int {
 						if status > 756 {
 							_ , _ = fmt.Fprintf( os.Stderr , "Warn: Write on %X from %v took %vms\r\n" , idcode[ : 4 ] , reques.URL.Host , status - 256 )
 							// Im assuming applications read quickly and dont become bottlenecks
-							if  len( queued ) == 0 && 
-							    ! remote {
+							if len( queued ) == 0 {
 								// Quickly satisfy demand
 							    	for len( queued ) < map[ int ]int{
 							    		1 : 15 ,
