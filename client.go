@@ -34,6 +34,8 @@ func client( argues [ ]string )int {
 	if err != nil {
 		return 2
 	}
+	var splits [ ]string
+	splits = append( strings.Split( pxyurl.Fragment , "," ) , "" )
 	var pooler chan io.ReadWriteCloser = make( chan io.ReadWriteCloser , 0 )
 	for _ , _ = range make( [ ]any , 256 , 256 ) {
 		go func( ){
@@ -51,10 +53,11 @@ func client( argues [ ]string )int {
 						TLSHandshakeTimeout : time.Second * 10 ,
 						ExpectContinueTimeout : time.Second * 1 ,
 						TLSClientConfig : & tls.Config{
+							ServerName : splits[ 1 ] ,
 							InsecureSkipVerify : slices.Contains( [ ]string{
 								"1" ,
 								"true" ,
-							} , strings.ToLower( os.Getenv( "KONA_TLS_INSECURE_SKIP_VERIFY" ) ) ),
+							} , strings.ToLower( os.Getenv( "KONA_TLS_INSECURE_SKIP_VERIFY" ) ) ) ,
 						} ,
 						TLSNextProto : map[ string ]func( string , * tls.Conn )http.RoundTripper{ } ,
 					} ,
@@ -69,6 +72,7 @@ func client( argues [ ]string )int {
 							"KAPPOH/0.1" ,
 						} ,
 					} ,
+					Host : splits[ 0 ] ,
 				} )
 				if err != nil {
 					_ , _ = fmt.Fprintf( os.Stderr , "Err: %v\r\n" , err )
