@@ -6,9 +6,11 @@ Usage
 -----
 Parallel Proxy Over HTTPS is known to work with [OVH](https://ovhcloud.com) and [Akile](https://akile.io) and is expected to work with any other [VPS](https://en.wikipedia.org/wiki/Virtual_Private_Server) provider. If `HOSTNAME` is your server's hostname and `SECRET` is a randomly generated secret.
 
--	On your server run `go run $(pwd) server :443 SECRET`
--	On your client run `KONA_TLS_INSECURE_SKIP_VERIFY=true go run $(pwd) client :53554 https://:SECRET@HOSTNAME`
+-	On your server run `KONA_TLS_CERTIFICATE_WITH_PRIVATE_KEY=$(cat selfsigned.crt) go run $(pwd) server :443 SECRET`
+-	On your client run `KONA_TLS_INSECURE_SKIP_VERIFY=true go run $(pwd) client :53554 https://:SECRET@HOSTNAME/`
 -	Then point your system's HTTP proxy to `http://localhost:53554`
+
+Override HTTP host and TLS SNI if needed like so: `https://:SECRET@HOSTNAME/#http-host.example.com,tls-sni.example.com`. 
 
 License 
 -------
