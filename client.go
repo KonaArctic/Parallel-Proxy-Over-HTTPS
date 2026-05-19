@@ -37,8 +37,9 @@ func client( argues [ ]string )int {
 	var splits [ ]string
 	splits = append( strings.Split( pxyurl.Fragment , "," ) , "" )
 	var pooler chan io.ReadWriteCloser = make( chan io.ReadWriteCloser , 0 )
+	_ , _ = fmt.Fprintf( os.Stderr , "Initializing ...\r\n" )
 	for _ , _ = range make( [ ]any , 256 , 256 ) {
-		time.Sleep( time.Millisecond * 100 )
+		time.Sleep( time.Millisecond * 50 )
 		go func( ){
 			var err error
 			for {
