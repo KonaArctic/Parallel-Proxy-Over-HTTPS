@@ -38,6 +38,7 @@ func client( argues [ ]string )int {
 	splits = append( strings.Split( pxyurl.Fragment , "," ) , "" )
 	var pooler chan io.ReadWriteCloser = make( chan io.ReadWriteCloser , 0 )
 	for _ , _ = range make( [ ]any , 256 , 256 ) {
+		time.Sleep( time.Millisecond * 100 )
 		go func( ){
 			var err error
 			for {
@@ -76,7 +77,7 @@ func client( argues [ ]string )int {
 				} )
 				if err != nil {
 					_ , _ = fmt.Fprintf( os.Stderr , "Err: %v\r\n" , err )
-					time.Sleep( time.Second )
+					time.Sleep( time.Millisecond * time.Duration( mrand.Uint32( ) % 5000 ) )
 					continue
 				}
 				if respon.StatusCode != http.StatusSwitchingProtocols {
