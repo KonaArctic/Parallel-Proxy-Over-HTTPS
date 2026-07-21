@@ -109,16 +109,6 @@ func server( argues [ ]string )int {
 			if reques.Method == http.MethodHead {
 				return
 			}
-			for {
-				var buffer [ ]byte = make( [ ]byte , 1 , 1 )
-				_ , err = reader.Read( buffer )
-				if err != nil {
-					return
-				}
-				if buffer[ 0 ] == 0x00 {
-					break
-				}
-			}
 			var idcode [ ]byte = make( [ ]byte , 16 , 16 )
 			_ , err = io.ReadFull( reader , idcode )
 			if err != nil {

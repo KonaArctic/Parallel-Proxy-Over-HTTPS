@@ -1,17 +1,13 @@
 package main
-import crand "crypto/rand"
+import "crypto/rand"
 import "crypto/tls"
 import "encoding/binary"
 import "fmt"
 import "io"
 import "net"
 import "net/http"
-import "net/netip"
 import "net/url"
-import mrand "math/rand"
 import "os"
-import "slices"
-import "strings"
 import "time"
 
 func client( argues [ ]string )int {
@@ -29,17 +25,13 @@ func client( argues [ ]string )int {
 		return 3
 	}
 	defer listen.Close( )
-	var pxyurl * url.URL
-	pxyurl , err = url.Parse( argues[ 1 ] )
+	var locate * url.URL
+	locate , err = url.Parse( argues[ 1 ] )
 	if err != nil {
 		return 2
 	}
-	var splits [ ]string
-	splits = append( strings.Split( pxyurl.Fragment , "," ) , "" )
-	var pooler chan io.ReadWriteCloser = make( chan io.ReadWriteCloser , 0 )
-	_ , _ = fmt.Fprintf( os.Stderr , "Initializing ...\r\n" )
-	for _ , _ = range make( [ ]any , 256 , 256 ) {
-		time.Sleep( time.Millisecond * 50 )
+	var pooler chan io.ReadWriteCloser = make( chan io.ReadWriteCloser , 256 )
+	for _ , _ = range make( [ ]any , 32 , 32 ) {
 		go func( ){
 			var err error
 			for {
@@ -54,18 +46,11 @@ func client( argues [ ]string )int {
 						IdleConnTimeout : time.Second * 90 ,
 						TLSHandshakeTimeout : time.Second * 10 ,
 						ExpectContinueTimeout : time.Second * 1 ,
-						TLSClientConfig : & tls.Config{
-							ServerName : splits[ 1 ] ,
-							InsecureSkipVerify : slices.Contains( [ ]string{
-								"1" ,
-								"true" ,
-							} , strings.ToLower( os.Getenv( "KONA_TLS_INSECURE_SKIP_VERIFY" ) ) ) ,
-						} ,
 						TLSNextProto : map[ string ]func( string , * tls.Conn )http.RoundTripper{ } ,
 					} ,
 				} ).Do( & http.Request{
 					Method : http.MethodGet ,
-					URL : pxyurl ,
+					URL : locate ,
 					Header : map[ string ][ ]string{
 						"Connection" : [ ]string{
 							"upgrade" ,
@@ -74,11 +59,10 @@ func client( argues [ ]string )int {
 							"KAPPOH/0.1" ,
 						} ,
 					} ,
-					Host : splits[ 0 ] ,
 				} )
 				if err != nil {
 					_ , _ = fmt.Fprintf( os.Stderr , "Err: %v\r\n" , err )
-					time.Sleep( time.Millisecond * time.Duration( mrand.Uint32( ) % 5000 ) )
+					time.Sleep( time.Second )
 					continue
 				}
 				if respon.StatusCode != http.StatusSwitchingProtocols {
@@ -86,26 +70,10 @@ func client( argues [ ]string )int {
 					time.Sleep( time.Minute )
 					continue
 				}
-				var stream io.ReadWriteCloser
-				stream = respon.Body.( io.ReadWriteCloser )
-				inners : for {
-					select {
-						case pooler <- stream :
-							break inners
-						case <- time.After( time.Second * 50 ) :
-							_ , err = stream.Write( [ ]byte{
-								byte( mrand.Int( ) % 255 ) + 1 ,
-							} )
-							if err != nil {
-								break inners
-							}
-					}
-				}
+				pooler <- respon.Body.( io.ReadWriteCloser )
 			}
 		}( )
 	}
-	var authed map[ netip.Addr ]time.Time = map[ netip.Addr ]time.Time{ }
-	var locker chan any = make( chan any , 1 )
 	err = ( & http.Server{
 		Handler : http.HandlerFunc( func( respon http.ResponseWriter , reques * http.Request ){
 			var err error
@@ -136,75 +104,7 @@ func client( argues [ ]string )int {
 				return
 			}
 			_ , _ = fmt.Fprintf( os.Stderr , "Info: %v %v\r\n" , reques.RemoteAddr , reques.URL.Host )
-			var ipaddr netip.AddrPort
-			ipaddr , err = netip.ParseAddrPort( reques.RemoteAddr )
-			if err != nil {
-				respon.WriteHeader( http.StatusInternalServerError )
-				_ , _ = respon.Write( [ ]byte( err.Error( ) + "\r\n" ) )
-				return
-			}
-			// Allow local area network
-			var inface [ ]net.Addr 
-			inface , err = net.InterfaceAddrs( )
-			if err != nil {
-				respon.WriteHeader( http.StatusInternalServerError )
-				_ , _ = respon.Write( [ ]byte( err.Error( ) + "\r\n" ) )
-				return
-			}
-			var remote bool = true
-			for ; len( inface ) > 0 ; inface = inface[ 1 : ] {
-				var prefix netip.Prefix
-				prefix , err = netip.ParsePrefix( inface[ 0 ].String( ) )
-				if err != nil {
-					respon.WriteHeader( http.StatusInternalServerError )
-					_ , _ = respon.Write( [ ]byte( err.Error( ) + "\r\n" ) )
-					return
-				}
-				if prefix.Contains( ipaddr.Addr( ) ) {
-					remote = false
-				}
-			}
-			if remote {
-				// Check we previously authorized this clients address
-				// Insecure, but allows user-agents that lack proxy authorization
-				var latest time.Time
-				locker <- true
-				latest , ok = authed[ ipaddr.Addr( ) ]
-				if  ! ok ||
-				    time.Now( ).Sub( latest ) > time.Hour {
-					var header [ ]string
-					header , ok = reques.Header[ "Proxy-Authorization" ]
-					if ! ok {
-					    	<- locker
-						respon.Header( )[ "Proxy-Authenticate" ] = [ ]string{
-							"Basic" ,
-						}
-						respon.WriteHeader( http.StatusProxyAuthRequired )
-						_ , _ = respon.Write( [ ]byte( "Proxy password required\r\n" ) )
-						return
-					}
-					var passwd string
-					_ , passwd , ok = ( & http.Request{
-						Header : map[ string ][ ]string{
-							"Authorization" : header ,
-						} ,
-					} ).BasicAuth( )
-					if  ! ok ||
-					    ! slices.Contains( argues[ 2 : ] , passwd ) {
-					    	<- locker
-						respon.Header( )[ "Proxy-Authenticate" ] = [ ]string{
-							"Basic" ,
-						}
-						respon.WriteHeader( http.StatusProxyAuthRequired )
-						_ , _ = respon.Write( [ ]byte( "Wrong password\r\n" ) )
-						return
-					}
-					
-				}
-				authed[ ipaddr.Addr( ) ] = time.Now( )
-				<- locker
-			}
-			var stream io.ReadWriteCloser = nil
+			var stream io.ReadWriteCloser
 			select {
 				case stream = <- pooler :
 				default :
@@ -214,16 +114,14 @@ func client( argues [ ]string )int {
 					return
 			}
 			defer stream.Close( )
-			var idcode [ ]byte = make( [ ]byte , 16 , 16 )
-			_ , err = io.ReadFull( crand.Reader , idcode )
+			var idcode [ ]byte = make( [ ]byte , 16 , 16 + 1 + len( [ ]byte( reques.URL.Host ) ) )
+			_ , err = io.ReadFull( rand.Reader , idcode )
 			if err != nil {
 				respon.WriteHeader( http.StatusInternalServerError )
 				_ , _ = respon.Write( [ ]byte( err.Error( ) + "\r\n" ) )
 				return
 			}
-			_ , err = stream.Write( append( append( append( [ ]byte{
-				0x00 ,
-			} , idcode ... ) , uint8( len( [ ]byte( reques.URL.Host ) ) ) ) , [ ]byte( reques.URL.Host ) ... ) )
+			_ , err = stream.Write( append( append( idcode , uint8( len( [ ]byte( reques.URL.Host ) ) ) ) , [ ]byte( reques.URL.Host ) ... ) )
 			if err != nil {
 				respon.WriteHeader( http.StatusBadGateway )
 				_ , _ = respon.Write( [ ]byte( err.Error( ) + "\r\n" ) )
@@ -312,9 +210,7 @@ func client( argues [ ]string )int {
 											break outers
 									}
 									defer stream.Close( )
-									_ , err = stream.Write( append( append( [ ]byte{
-										0x00 ,
-									} , idcode ... ) , uint8( len( queued ) ) ) )
+									_ , err = stream.Write( append( idcode , uint8( len( queued ) ) ) )
 									if err != nil {
 										break outers
 									}
